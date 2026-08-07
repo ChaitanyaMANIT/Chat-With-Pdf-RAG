@@ -2,12 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { Queue } from 'bullmq';
-import { OpenAIEmbeddings } from '@langchain/openai';
+import { GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { QdrantVectorStore } from '@langchain/qdrant';
-import OpenAI from 'openai';
+import dotenv from 'dotenv';
 
-const client = new OpenAI({
-  apiKey: '',
+dotenv.config();
+
+const client = new ChatGoogleGenerativeAI({
+  model: 'gemini-2.5-flash',
+  apiKey: process.env.GOOGLE_API_KEY,
 });
 const queue = new Queue('file-upload-queue', {
   connection: {
@@ -50,9 +53,9 @@ app.post('/upload/pdf', upload.single('pdf'), async (req, res) => {
 app.get('/chat', async (req, res) => {
   const userQuery = req.query.message;
 
-  const embeddings = new OpenAIEmbeddings({
-    model: 'text-embedding-3-small',
-    apiKey: '',
+  const embeddings = new GoogleGenerativeAIEmbeddings({
+    model: 'gemini-embedding-001',
+    apiKey: process.env.GOOGLE_API_KEY,
   });
   const vectorStore = await QdrantVectorStore.fromExistingCollection(
     embeddings,
@@ -72,16 +75,13 @@ app.get('/chat', async (req, res) => {
   ${JSON.stringify(result)}
   `;
 
-  const chatResult = await client.chat.completions.create({
-    model: 'gpt-4.1',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: userQuery },
-    ],
-  });
+  const chatResult = await client.invoke([
+    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'user', content: userQuery },
+  ]);
 
   return res.json({
-    message: chatResult.choices[0].message.content,
+    message: chatResult.content,
     docs: result,
   });
 });
